@@ -1,8 +1,9 @@
 // Module to read messages from AMQP queue and store in REDIS
-
-let amqp_url = "amqp://guest:guest@10.122.13.226:5672";
-let redis_url = "redis://10.122.13.226:6379";
-let queue_name = "evt-q-triage-response-cache";
+extern crate amqp;
+extern crate redis;
+use amqp::{Basic, Channel, Connection, Consumer, ConsumerMessage, Delivery};
+use std::env;
+use std::Error;
 
 fn connect_to_amqp(url: &str) -> Result<(Connection, Channel), Error> {
     let conn = Connection::open(url)?;
@@ -27,17 +28,16 @@ fn get_message(ch: &Channel, queue_name: &str) -> Result<(String, String), Error
     Ok((msg_id.to_string(), msg_body.to_string()))
 }
 
-fn process_message(msg_id: String, msg_body: String) {
-    let msg_body = serde_json::from_str::<TriageResponse>(&msg_body).unwrap();
-    let msg_body = serde_json::to_string(&msg_body).unwrap();
-    let msg_body = msg_body.as_bytes();
-    redis.set(&msg_id, msg_body).unwrap();
-}
+fn main() {
+    let amqp_url = "amqp://10.122.13.226:5672";
+    let redis_url = "redis://10.122.13.226:6379";    
+    let queue_name = "evt-q-triage-response-cache";
 
-let mut amqp = connect_to_amqp(amqp_url).unwrap();
-let mut redis = connect_to_redis(redis_url).unwrap();
+    let mut (conn,amqp) = connect_to_amqp(amqp_url).unwrap();
+    let mut redis = connect_to_redis(redis_url).unwrap();
 
-loop {
-    let (msg_id, msg_body) = get_message(&amqp.1, &queue_name).unwrap();
-    process_message(msg_id, msg_body);
+    loop {
+        let (msg_id, msg_body) = get_message(&amqp.1, &queue_name).unwrap();
+        redis.set(&msg_id, &msg_body).unwrap();    
+    }
 }
